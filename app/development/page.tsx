@@ -108,8 +108,6 @@ export default function DevelopmentPage() {
 					))}
 				</div>
 			</main>
-
-			<BlogFooter />
 		</div>
 	)
 }
