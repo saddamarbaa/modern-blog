@@ -13,6 +13,10 @@ interface User {
 	bio?: string
 	skills?: string[]
 	isVerified: boolean
+	gender?: string
+	phoneNumber?: string
+	dateOfBirth?: string
+	acceptTerms?: boolean
 }
 
 interface AuthContextType {
@@ -26,6 +30,7 @@ interface AuthContextType {
 		confirmPassword: string,
 	) => Promise<void>
 	logout: () => Promise<void>
+	updateUser: (data: Partial<User>) => Promise<void>
 	loading: boolean
 	error: string | null
 }
@@ -48,10 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		try {
 			const response = await fetch(`${API_BASE_URL}/auth/profile`, {
 				method: 'GET',
-				credentials: 'include', // Include cookies for authentication
-				headers: {
-					'Content-Type': 'application/json',
-				},
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
 			})
 
 			if (response.ok) {
@@ -74,24 +77,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			const response = await fetch(`${API_BASE_URL}/auth/login`, {
 				method: 'POST',
 				credentials: 'include',
-				headers: {
-					'Content-Type': 'application/json',
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ email, password }),
 			})
 
 			const data = await response.json()
-
-			if (!response.ok) {
-				throw new Error(data.message || 'Login failed')
-			}
-
-			if (data.success) {
-				// Get user profile after successful login
-				await checkAuthStatus()
-			} else {
-				throw new Error(data.message || 'Login failed')
-			}
+			if (!response.ok) throw new Error(data.message || 'Login failed')
+			if (data.success) await checkAuthStatus()
+			else throw new Error(data.message || 'Login failed')
 		} catch (error) {
 			const errorMessage =
 				error instanceof Error ? error.message : 'Login failed'
@@ -115,9 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			const response = await fetch(`${API_BASE_URL}/auth/signup`, {
 				method: 'POST',
 				credentials: 'include',
-				headers: {
-					'Content-Type': 'application/json',
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					firstName,
 					lastName,
@@ -129,19 +120,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			})
 
 			const data = await response.json()
-
-			if (!response.ok) {
-				throw new Error(data.message || 'Registration failed')
-			}
-
-			if (data.success) {
-				// Note: User needs to verify email before they can fully access the system
+			if (!response.ok) throw new Error(data.message || 'Registration failed')
+			if (data.success)
 				setError(
 					'Registration successful! Please check your email to verify your account.',
 				)
-			} else {
-				throw new Error(data.message || 'Registration failed')
-			}
+			else throw new Error(data.message || 'Registration failed')
 		} catch (error) {
 			const errorMessage =
 				error instanceof Error ? error.message : 'Registration failed'
@@ -154,14 +138,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 	const logout = async () => {
 		try {
-			// Get refresh token from cookies or storage if needed
 			await fetch(`${API_BASE_URL}/auth/logout`, {
 				method: 'POST',
 				credentials: 'include',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({}), // Your API might need refreshToken in body
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({}),
 			})
 		} catch (error) {
 			console.error('Logout error:', error)
@@ -171,9 +152,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
+	const updateUser = async (updatedData: Partial<User>) => {
+		if (!user) return
+		try {
+			const response = await fetch(`${API_BASE_URL}/auth/update/${user._id}`, {
+				method: 'PATCH',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(updatedData),
+			})
+
+			const data = await response.json()
+			if (response.ok && data.success) {
+				setUser(data.data.user)
+			} else {
+				throw new Error(data.message || 'Failed to update user')
+			}
+		} catch (err) {
+			console.error(err)
+			throw err
+		}
+	}
+
 	return (
 		<AuthContext.Provider
-			value={{ user, login, register, logout, loading, error }}>
+			value={{ user, login, register, logout, updateUser, loading, error }}>
 			{children}
 		</AuthContext.Provider>
 	)
@@ -181,8 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
 	const context = useContext(AuthContext)
-	if (context === undefined) {
+	if (context === undefined)
 		throw new Error('useAuth must be used within an AuthProvider')
-	}
 	return context
 }
