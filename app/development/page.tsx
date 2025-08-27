@@ -47,8 +47,6 @@ const developmentPosts = [
 export default function DevelopmentPage() {
 	return (
 		<div className="bg-background min-h-screen">
-			<BlogHeader />
-
 			<main className="mx-auto px-4 sm:px-6 lg:px-8 py-12 container">
 				<div className="mb-12">
 					<h1 className="mb-4 font-bold text-foreground text-4xl">

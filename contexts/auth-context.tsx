@@ -30,7 +30,7 @@ interface AuthContextType {
 		confirmPassword: string,
 	) => Promise<void>
 	logout: () => Promise<void>
-	updateUser: (data: Partial<User>) => Promise<void>
+	updateUser: (updatedData: FormData) => Promise<void>
 	loading: boolean
 	error: string | null
 }
@@ -152,17 +152,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
-	const updateUser = async (updatedData: Partial<User>) => {
+	const updateUser = async (updatedData: FormData): Promise<void> => {
 		if (!user) return
+
 		try {
 			const response = await fetch(`${API_BASE_URL}/auth/update/${user._id}`, {
 				method: 'PATCH',
 				credentials: 'include',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(updatedData),
+				body: updatedData, // FormData is sent directly
 			})
 
 			const data = await response.json()
+
 			if (response.ok && data.success) {
 				setUser(data.data.user)
 			} else {
