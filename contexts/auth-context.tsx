@@ -42,13 +42,44 @@ const API_BASE_URL =
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [user, setUser] = useState<User | null>(null)
-	const [loading, setLoading] = useState(true)
+	const [loading, setLoading] = useState(true) // full-page loading state
 	const [error, setError] = useState<string | null>(null)
 
 	useEffect(() => {
 		checkAuthStatus()
 	}, [])
 
+	// 🔹 Refresh token logic
+	const refreshToken = async (): Promise<boolean> => {
+		try {
+			const refreshToken = localStorage.getItem('refreshToken') || ''
+			if (!refreshToken) throw new Error('No refresh token found')
+
+			const response = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+				method: 'POST',
+				credentials: 'include',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ refreshToken }),
+			})
+
+			const data = await response.json()
+			if (!response.ok || !data.success)
+				throw new Error(data.message || 'Token refresh failed')
+
+			// save new refreshToken if backend sends one
+			if (data.data && data.data?.user?.refreshToken) {
+				localStorage.setItem('refreshToken', data.data.user.refreshToken)
+			}
+
+			return true
+		} catch (err) {
+			console.error('Refresh token failed', err)
+			setUser(null)
+			return false
+		}
+	}
+
+	// 🔹 Check auth status (called on mount & retry after refresh)
 	const checkAuthStatus = async () => {
 		try {
 			const response = await fetch(`${API_BASE_URL}/auth/profile`, {
@@ -57,22 +88,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				headers: { 'Content-Type': 'application/json' },
 			})
 
-			if (response.ok) {
-				const data = await response.json()
-				if (data.success && data.data?.user) {
-					setUser(data.data.user)
+			const data = await response.json()
+
+			if (response.ok && data.success && data.data?.user) {
+				setUser(data.data.user)
+			} else if (data.message === 'jwt expired') {
+				console.log('JWT expired, refreshing token...')
+				const refreshed = await refreshToken()
+				if (refreshed) {
+					console.log('Retrying profile fetch...')
+					await checkAuthStatus()
 				}
+			} else {
+				console.error('Auth check failed:', data.message)
 			}
 		} catch (error) {
-			console.error('Auth check failed:', error)
+			console.error('Network error during auth check:', error)
 		} finally {
 			setLoading(false)
 		}
 	}
 
+	// 🔹 Login
 	const login = async (email: string, password: string) => {
 		setLoading(true)
 		setError(null)
+
 		try {
 			const response = await fetch(`${API_BASE_URL}/auth/login`, {
 				method: 'POST',
@@ -83,8 +124,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 			const data = await response.json()
 			if (!response.ok) throw new Error(data.message || 'Login failed')
-			if (data.success) await checkAuthStatus()
-			else throw new Error(data.message || 'Login failed')
+
+			if (data.data?.refreshToken) {
+				localStorage.setItem('refreshToken', data.data.refreshToken)
+				await checkAuthStatus()
+			} else throw new Error(data.message || 'Login failed')
 		} catch (error) {
 			const errorMessage =
 				error instanceof Error ? error.message : 'Login failed'
@@ -95,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
+	// 🔹 Register
 	const register = async (
 		firstName: string,
 		lastName: string,
@@ -136,6 +181,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}
 
+	// 🔹 Logout
 	const logout = async () => {
 		try {
 			await fetch(`${API_BASE_URL}/auth/logout`, {
@@ -147,11 +193,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		} catch (error) {
 			console.error('Logout error:', error)
 		} finally {
+			localStorage.removeItem('refreshToken')
 			setUser(null)
 			setError(null)
 		}
 	}
 
+	// 🔹 Update User
 	const updateUser = async (updatedData: FormData): Promise<void> => {
 		if (!user) return
 
@@ -159,7 +207,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			const response = await fetch(`${API_BASE_URL}/auth/update/${user._id}`, {
 				method: 'PATCH',
 				credentials: 'include',
-				body: updatedData, // FormData is sent directly
+				body: updatedData,
 			})
 
 			const data = await response.json()
@@ -174,6 +222,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			throw err
 		}
 	}
+
+	// 🔹 Show loading spinner while checking auth
+	// if (loading) {
+	// 	return (
+	// 		<div className="flex items-center justify-center min-h-screen">
+	// 			<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+	// 		</div>
+	// 	)
+	// }
 
 	return (
 		<AuthContext.Provider

@@ -15,6 +15,7 @@ import {
 	SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
+import LoadingScreen from '@/components/ui/LoadingScreen'
 
 export default function ProfilePage() {
 	const { user, loading, updateUser } = useAuth()
@@ -27,12 +28,8 @@ export default function ProfilePage() {
 		if (user) setFormData(user)
 	}, [user])
 
-	if (loading)
-		return (
-			<div className="flex flex-col items-center justify-center py-20">
-				<p className="text-gray-600">Loading profile...</p>
-			</div>
-		)
+	// show loader while checking auth
+	if (loading) return <LoadingScreen />
 
 	if (!user)
 		return (
